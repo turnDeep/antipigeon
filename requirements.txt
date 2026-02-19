@@ -1,0 +1,6 @@
+discord.py
+python-dotenv
+apscheduler
+keyring
+cryptography
+rich
