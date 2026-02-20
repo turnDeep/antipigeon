@@ -141,50 +141,46 @@ class AntipigeonBot(commands.Bot):
             return
 
         # Reply with initial status
-        embed = discord.Embed(
-            title="🕊️ Antipigeon Task Received",
-            description=f"Processing task for workspace **{workspace.name}**...",
+        # Based on user feedback: Do NOT reply, just send a new message for updates
+        # Style match: Blue for running, Green for success
+
+        initial_embed = discord.Embed(
+            description=f"🔄 [Planning] 伝達中...",
             color=discord.Color.blue()
         )
-        embed.add_field(name="Prompt", value=prompt[:1000] if prompt else "(No text)", inline=False)
-        if context_text:
-             embed.add_field(name="Context", value="Included from reply.", inline=False)
-        if attachments:
-            embed.add_field(name="Attachments", value="\n".join(attachments), inline=False)
-
-        reply_msg = await message.reply(embed=embed)
+        status_msg = await message.channel.send(embed=initial_embed)
 
         # Execute
         try:
             async for task_update in self.antigravity.execute_task(full_prompt, workspace.name, attachments):
                 # Update Embed based on progress
                 new_embed = discord.Embed(
-                    title=f"🕊️ Task Status: {task_update.status.value.upper()}",
-                    description=f"**Step**: {task_update.current_step}\n**Progress**: {task_update.progress}%",
-                    color=discord.Color.orange() if task_update.status == TaskStatus.RUNNING else discord.Color.green()
+                    color=discord.Color.blue() if task_update.status == TaskStatus.RUNNING else discord.Color.green()
                 )
-                if task_update.status == TaskStatus.COMPLETED:
-                    new_embed.title = "✅ Task Completed"
-                    new_embed.description = task_update.result.output
+
+                if task_update.status == TaskStatus.RUNNING:
+                    new_embed.description = f"🔄 [{task_update.current_step}] ({task_update.progress}%)"
+
+                elif task_update.status == TaskStatus.COMPLETED:
+                    new_embed.title = "✅ 実行確認"
+                    new_embed.description = f"**概要**: {prompt[:50]}...\n**実行タイプ**: ⚡ 即時実行\n\n**実行内容**:\n{task_update.result.output}"
                     if task_update.result.artifacts:
                         files_str = "\n".join([f"`{f}`" for f in task_update.result.artifacts])
                         new_embed.add_field(name="Artifacts", value=files_str, inline=False)
 
                 elif task_update.status == TaskStatus.FAILED:
-                     new_embed.title = "❌ Task Failed"
                      new_embed.color = discord.Color.red()
-                     new_embed.description = f"Error: {task_update.result.error}"
+                     new_embed.description = f"❌ Task Failed: {task_update.result.error}"
 
-                await reply_msg.edit(embed=new_embed)
+                await status_msg.edit(embed=new_embed)
 
         except Exception as e:
             logger.error(f"Error executing task: {e}")
             error_embed = discord.Embed(
-                title="❌ Internal Error",
-                description=str(e),
+                description=f"❌ Internal Error: {str(e)}",
                 color=discord.Color.red()
             )
-            await reply_msg.edit(embed=error_embed)
+            await status_msg.edit(embed=error_embed)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Global check for application commands (slash commands)."""
