@@ -1,6 +1,6 @@
-# AntiCrow 🐦‍⬛
+# Antipigeon 🕊️
 
-DiscordとAntigravityを行き来して、指示と結果を運ぶ“伝令カラス”システム。
+DiscordとAntigravityを行き来して、指示と結果を運ぶ“伝書鳩”システム。
 どこからでもスマホのDiscordアプリで、自宅PCのAntigravityを遠隔操作できます。
 
 ## 特徴
@@ -76,16 +76,16 @@ ANTIGRAVITY_PATH=/path/to/antigravity
 
 バックグラウンドで常に実行したい場合は、Systemdサービスを作成することをお勧めします。
 
-1.  `/etc/systemd/system/anticrow.service` を作成します:
+1.  `/etc/systemd/system/antipigeon.service` を作成します:
     ```ini
     [Unit]
-    Description=AntiCrow Discord Bot
+    Description=Antipigeon Discord Bot
     After=network.target
 
     [Service]
     User=your_username
-    WorkingDirectory=/path/to/anticrow
-    ExecStart=/path/to/anticrow/venv/bin/python3 src/bot.py
+    WorkingDirectory=/path/to/antipigeon
+    ExecStart=/path/to/antipigeon/venv/bin/python3 src/bot.py
     Restart=always
 
     [Install]
@@ -93,8 +93,8 @@ ANTIGRAVITY_PATH=/path/to/antigravity
     ```
 2.  サービスを有効化・起動します:
     ```bash
-    sudo systemctl enable anticrow
-    sudo systemctl start anticrow
+    sudo systemctl enable antipigeon
+    sudo systemctl start antipigeon
     ```
 
 ## コマンド一覧

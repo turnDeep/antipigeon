@@ -15,7 +15,7 @@ from src.utils.attachment_handler import process_attachment
 
 logger = logging.getLogger(__name__)
 
-class AntiCrowBot(commands.Bot):
+class AntipigeonBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -41,7 +41,7 @@ class AntiCrowBot(commands.Bot):
 
     async def on_ready(self):
         logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
-        logger.info("AntiCrow 🐦‍⬛ is ready to fly!")
+        logger.info("Antipigeon 🕊️ is ready to fly!")
 
         # Sync commands
         try:
@@ -145,7 +145,7 @@ class AntiCrowBot(commands.Bot):
         # Style match: Blue for running, Green for success
 
         initial_embed = discord.Embed(
-            description=f"🔄 [Planning] AntiCrowが伝達中... 🐦‍⬛",
+            description=f"🔄 [Planning] Antipigeonが伝達中... 🕊️",
             color=discord.Color.blue()
         )
         status_msg = await message.channel.send(embed=initial_embed)
@@ -189,7 +189,7 @@ class AntiCrowBot(commands.Bot):
             return False
         return True
 
-bot = AntiCrowBot()
+bot = AntipigeonBot()
 
 if __name__ == "__main__":
     if not config.token:

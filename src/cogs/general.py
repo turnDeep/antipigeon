@@ -147,7 +147,7 @@ class General(commands.Cog):
     async def execute_template_task(self, channel, prompt, workspace):
         # Create initial embed
         embed = discord.Embed(
-            title="🐦‍⬛ AntiCrow Template Task",
+            title="🕊️ Antipigeon Template Task",
             description=f"Processing template for workspace **{workspace.name}**...",
             color=discord.Color.blue()
         )
@@ -158,7 +158,7 @@ class General(commands.Cog):
         try:
             async for task_update in self.antigravity.execute_task(prompt, workspace.name):
                 new_embed = discord.Embed(
-                    title=f"🐦‍⬛ Task Status: {task_update.status.value.upper()}",
+                    title=f"🕊️ Task Status: {task_update.status.value.upper()}",
                     description=f"**Step**: {task_update.current_step}\n**Progress**: {task_update.progress}%",
                     color=discord.Color.orange() if task_update.status == TaskStatus.RUNNING else discord.Color.green()
                 )

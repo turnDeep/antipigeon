@@ -73,7 +73,7 @@ class Scheduler(commands.Cog):
                 return
 
         embed = discord.Embed(
-            title="🐦‍⬛ AntiCrow Scheduled Task Started",
+            title="🕊️ Antipigeon Scheduled Task Started",
             description=f"Executing: **{prompt}**\nWorkspace: **{workspace_name}**",
             color=discord.Color.purple()
         )
@@ -85,12 +85,12 @@ class Scheduler(commands.Cog):
         try:
             async for task_update in client.execute_task(prompt, workspace_name):
                 new_embed = discord.Embed(
-                    title=f"🐦‍⬛ AntiCrow Task Status: {task_update.status.value.upper()}",
+                    title=f"🕊️ Antipigeon Task Status: {task_update.status.value.upper()}",
                     description=f"**Step**: {task_update.current_step}\n**Progress**: {task_update.progress}%",
                     color=discord.Color.orange()
                 )
                 if task_update.status.value == "completed":
-                    new_embed.title = "✅ AntiCrow Task Completed"
+                    new_embed.title = "✅ Antipigeon Task Completed"
                     new_embed.color = discord.Color.green()
                     new_embed.description = task_update.result.output
 

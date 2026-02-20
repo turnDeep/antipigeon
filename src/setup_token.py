@@ -16,7 +16,7 @@ except ImportError as e:
 
 def setup_token():
     print("=========================================")
-    print("   🐦‍⬛ AntiCrow Token Setup Wizard 🐦‍⬛   ")
+    print("   🕊️ Antipigeon Token Setup Wizard 🕊️   ")
     print("=========================================")
     print(f"This tool will securely store your Discord Bot Token using the system keyring.")
     print(f"Service Name: {SERVICE_NAME}")
