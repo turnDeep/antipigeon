@@ -1,6 +1,6 @@
-# Antipigeon 🐦‍⬛
+# Antipigeon 🕊️
 
-DiscordとAntigravityを行き来して、指示と結果を運ぶ“伝令カラス”システム。
+DiscordとAntigravityを行き来して、指示と結果を運ぶ“伝書鳩”システム。
 どこからでもスマホのDiscordアプリで、自宅PCのAntigravityを遠隔操作できます。
 
 ## 特徴

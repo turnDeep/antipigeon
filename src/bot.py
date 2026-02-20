@@ -138,7 +138,7 @@ class AntipigeonBot(commands.Bot):
 
         # Reply with initial status
         embed = discord.Embed(
-            title="🐦‍⬛ Antipigeon Task Received",
+            title="🕊️ Antipigeon Task Received",
             description=f"Processing task for workspace **{workspace.name}**...",
             color=discord.Color.blue()
         )
@@ -155,7 +155,7 @@ class AntipigeonBot(commands.Bot):
             async for task_update in self.antigravity.execute_task(full_prompt, workspace.name, attachments):
                 # Update Embed based on progress
                 new_embed = discord.Embed(
-                    title=f"🐦‍⬛ Task Status: {task_update.status.value.upper()}",
+                    title=f"🕊️ Task Status: {task_update.status.value.upper()}",
                     description=f"**Step**: {task_update.current_step}\n**Progress**: {task_update.progress}%",
                     color=discord.Color.orange() if task_update.status == TaskStatus.RUNNING else discord.Color.green()
                 )
