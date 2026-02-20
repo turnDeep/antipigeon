@@ -54,11 +54,48 @@ ANTIGRAVITY_PATH=/path/to/antigravity
 
 ## 実行
 
-Botを起動します:
+### Windows
 
-```bash
-python src/bot.py
-```
+1.  コマンドプロンプトまたはPowerShellを開きます。
+2.  プロジェクトディレクトリに移動します。
+3.  以下のコマンドでBotを起動します:
+    ```cmd
+    python src/bot.py
+    ```
+
+### Ubuntu (Linux)
+
+1.  ターミナルを開きます。
+2.  プロジェクトディレクトリに移動します。
+3.  以下のコマンドでBotを起動します:
+    ```bash
+    python3 src/bot.py
+    ```
+
+#### 常駐化する場合 (Systemdの例)
+
+バックグラウンドで常に実行したい場合は、Systemdサービスを作成することをお勧めします。
+
+1.  `/etc/systemd/system/antipigeon.service` を作成します:
+    ```ini
+    [Unit]
+    Description=Antipigeon Discord Bot
+    After=network.target
+
+    [Service]
+    User=your_username
+    WorkingDirectory=/path/to/antipigeon
+    ExecStart=/path/to/antipigeon/venv/bin/python3 src/bot.py
+    Restart=always
+
+    [Install]
+    WantedBy=multi-user.target
+    ```
+2.  サービスを有効化・起動します:
+    ```bash
+    sudo systemctl enable antipigeon
+    sudo systemctl start antipigeon
+    ```
 
 ## コマンド一覧
 
