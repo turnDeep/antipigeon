@@ -2,6 +2,9 @@ import asyncio
 import uuid
 import random
 import logging
+import json
+import aiohttp
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Optional, AsyncGenerator, Dict, Any
 from enum import Enum
@@ -48,7 +51,52 @@ class Task:
     current_step: str = "Queued"
     result: Optional[TaskResult] = None
 
-class AntigravityClient:
+class BaseAntigravityClient(ABC):
+    @abstractmethod
+    async def get_models(self) -> List[Model]:
+        pass
+
+    @abstractmethod
+    async def get_workspaces(self) -> List[Workspace]:
+        pass
+
+    @abstractmethod
+    async def get_workspace_by_name(self, name: str) -> Optional[Workspace]:
+        pass
+
+    @abstractmethod
+    async def create_workspace(self, name: str) -> Workspace:
+        pass
+
+    @abstractmethod
+    async def set_model(self, model_id: str):
+        pass
+
+    @abstractmethod
+    async def get_current_model(self) -> Model:
+        pass
+
+    @abstractmethod
+    async def set_mode(self, mode: str):
+        pass
+
+    @abstractmethod
+    async def get_mode(self) -> str:
+        pass
+
+    @abstractmethod
+    async def execute_task(self, prompt: str, workspace_name: str, attachments: List[str] = []) -> AsyncGenerator[Task, None]:
+        pass
+
+    @abstractmethod
+    async def cancel_task(self, task_id: str) -> bool:
+        pass
+
+    @abstractmethod
+    async def get_task_status(self, task_id: str) -> Optional[Task]:
+        pass
+
+class MockAntigravityClient(BaseAntigravityClient):
     def __init__(self):
         self._models = [
             Model("gemini-3-pro-high", "Gemini 3 Pro (High)", "3.0", ["high-res", "coding"], "🟢 100% ⏳ 4h 59m"),
@@ -157,9 +205,6 @@ class AntigravityClient:
         )
         yield task
 
-        # Cleanup from active tasks after some time in real app, but here we keep it for status check?
-        # For now, keep it.
-
     async def cancel_task(self, task_id: str) -> bool:
         if task_id in self._active_tasks:
             self._active_tasks[task_id].status = TaskStatus.CANCELLED
@@ -168,3 +213,161 @@ class AntigravityClient:
 
     async def get_task_status(self, task_id: str) -> Optional[Task]:
         return self._active_tasks.get(task_id)
+
+class HttpAntigravityClient(BaseAntigravityClient):
+    """
+    Real implementation connecting to an Antigravity instance via HTTP API.
+    Since Google Antigravity is in preview, this assumes a standard RESTful structure.
+    Adjust endpoints as needed.
+    """
+    def __init__(self, api_url: str):
+        self.api_url = api_url.rstrip("/")
+        self._session = None
+        self._current_model_id = "default-model" # Fallback if API doesn't persist state
+        self._mode = "planning"
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    async def get_models(self) -> List[Model]:
+        try:
+            session = await self._get_session()
+            async with session.get(f"{self.api_url}/models") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return [Model(**item) for item in data]
+                else:
+                    logger.error(f"Failed to fetch models: {resp.status}")
+                    return []
+        except Exception as e:
+            logger.error(f"Error connecting to Antigravity API: {e}")
+            return []
+
+    async def get_workspaces(self) -> List[Workspace]:
+        try:
+            session = await self._get_session()
+            async with session.get(f"{self.api_url}/workspaces") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return [Workspace(**item) for item in data]
+                return []
+        except Exception as e:
+            logger.error(f"Error fetching workspaces: {e}")
+            return []
+
+    async def get_workspace_by_name(self, name: str) -> Optional[Workspace]:
+        wss = await self.get_workspaces()
+        for ws in wss:
+            if ws.name == name:
+                return ws
+        return None
+
+    async def create_workspace(self, name: str) -> Workspace:
+        session = await self._get_session()
+        async with session.post(f"{self.api_url}/workspaces", json={"name": name}) as resp:
+            if resp.status == 201:
+                data = await resp.json()
+                return Workspace(**data)
+            raise Exception(f"Failed to create workspace: {resp.status}")
+
+    async def set_model(self, model_id: str):
+        session = await self._get_session()
+        async with session.post(f"{self.api_url}/config/model", json={"model_id": model_id}) as resp:
+            if resp.status == 200:
+                self._current_model_id = model_id
+            else:
+                raise ValueError(f"Failed to set model: {resp.status}")
+
+    async def get_current_model(self) -> Model:
+        # Optimistic: check local cache or fetch from API
+        models = await self.get_models()
+        for m in models:
+            if m.id == self._current_model_id:
+                return m
+        # Fallback
+        return models[0] if models else Model("unknown", "Unknown", "0", [], "Unknown")
+
+    async def set_mode(self, mode: str):
+        session = await self._get_session()
+        async with session.post(f"{self.api_url}/config/mode", json={"mode": mode}) as resp:
+            if resp.status == 200:
+                self._mode = mode
+            else:
+                raise ValueError(f"Failed to set mode: {resp.status}")
+
+    async def get_mode(self) -> str:
+        return self._mode
+
+    async def execute_task(self, prompt: str, workspace_name: str, attachments: List[str] = []) -> AsyncGenerator[Task, None]:
+        session = await self._get_session()
+
+        # Prepare payload
+        payload = {
+            "prompt": prompt,
+            "workspace": workspace_name,
+            "attachments": attachments,
+            "model_id": self._current_model_id,
+            "mode": self._mode
+        }
+
+        # Streaming request (SSE or JSON lines)
+        try:
+            async with session.post(f"{self.api_url}/tasks/execute", json=payload) as resp:
+                if resp.status != 200:
+                    yield Task(id="error", prompt=prompt, workspace_id="", model_id="", status=TaskStatus.FAILED, result=TaskResult(TaskStatus.FAILED, f"API Error: {resp.status}"))
+                    return
+
+                # Read lines
+                async for line in resp.content:
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line.decode('utf-8'))
+                        # Construct Task object from update
+                        task = Task(
+                            id=data.get("id", "unknown"),
+                            prompt=prompt,
+                            workspace_id=data.get("workspace_id", ""),
+                            model_id=data.get("model_id", ""),
+                            status=TaskStatus(data.get("status", "running")),
+                            progress=data.get("progress", 0),
+                            current_step=data.get("step", ""),
+                            result=TaskResult(**data["result"]) if "result" in data else None
+                        )
+                        yield task
+                    except Exception as e:
+                        logger.error(f"Error parsing stream line: {e}")
+        except Exception as e:
+            logger.error(f"Connection error during task execution: {e}")
+            yield Task(id="error", prompt=prompt, workspace_id="", model_id="", status=TaskStatus.FAILED, result=TaskResult(TaskStatus.FAILED, str(e)))
+
+    async def cancel_task(self, task_id: str) -> bool:
+        session = await self._get_session()
+        async with session.post(f"{self.api_url}/tasks/{task_id}/cancel") as resp:
+            return resp.status == 200
+
+    async def get_task_status(self, task_id: str) -> Optional[Task]:
+        session = await self._get_session()
+        async with session.get(f"{self.api_url}/tasks/{task_id}") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                # Simplified reconstruction
+                return Task(
+                    id=data["id"],
+                    prompt=data["prompt"],
+                    workspace_id=data["workspace_id"],
+                    model_id=data["model_id"],
+                    status=TaskStatus(data["status"]),
+                    progress=data["progress"]
+                )
+        return None
+
+def get_antigravity_client(api_url: Optional[str] = None) -> BaseAntigravityClient:
+    if api_url:
+        logger.info(f"Using Real Antigravity Client at {api_url}")
+        return HttpAntigravityClient(api_url)
+    else:
+        logger.info("Using Mock Antigravity Client (Simulation Mode)")
+        return MockAntigravityClient()

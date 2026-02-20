@@ -3,12 +3,12 @@ import asyncio
 from unittest.mock import MagicMock
 from src.cogs.scheduler import Scheduler
 from src.cogs.general import ModelManagementView, ModelButton
-from src.core.antigravity import AntigravityClient, Model
+from src.core.antigravity import MockAntigravityClient, Model
 
 class TestSchedulerLogic(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.bot = MagicMock()
-        self.bot.antigravity = AntigravityClient()
+        self.bot.antigravity = MockAntigravityClient()
         # Scheduler calls start() in init, which needs loop
         self.cog = Scheduler(self.bot)
 
@@ -36,7 +36,7 @@ class TestSchedulerLogic(unittest.IsolatedAsyncioTestCase):
 class TestGeneralLogic(unittest.IsolatedAsyncioTestCase):
     async def test_model_view(self):
         # View init needs loop
-        client = AntigravityClient()
+        client = MockAntigravityClient()
         models = [
             Model("m1", "Model 1", "1.0", [], "Status 1"),
             Model("m2", "Model 2", "2.0", [], "Status 2")

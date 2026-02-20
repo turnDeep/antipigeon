@@ -1,10 +1,10 @@
 import unittest
 import asyncio
-from src.core.antigravity import AntigravityClient, TaskStatus
+from src.core.antigravity import MockAntigravityClient, TaskStatus
 
 class TestAntigravity(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.client = AntigravityClient()
+        self.client = MockAntigravityClient()
 
     async def test_get_models(self):
         models = await self.client.get_models()

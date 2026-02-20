@@ -4,3 +4,4 @@ apscheduler
 keyring
 cryptography
 rich
+aiohttp

@@ -19,6 +19,7 @@ class Config:
         self._allowed_user_ids = self._load_allowed_user_ids()
         self._token = self._load_token()
         self.antigravity_path = os.getenv("ANTIGRAVITY_PATH", "antigravity")
+        self.antigravity_api_url = os.getenv("ANTIGRAVITY_API_URL", None)
 
     def _load_allowed_user_ids(self):
         ids_str = os.getenv("ALLOWED_USER_IDS", "")

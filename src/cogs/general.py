@@ -6,7 +6,7 @@ import os
 import logging
 from typing import List, Optional
 
-from src.core.antigravity import AntigravityClient, TaskStatus, Model
+from src.core.antigravity import BaseAntigravityClient, TaskStatus, Model
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class RefreshButton(discord.ui.Button):
         await view.refresh_ui(interaction)
 
 class ModelManagementView(discord.ui.View):
-    def __init__(self, client: AntigravityClient, models: List[Model], current_model: Model):
+    def __init__(self, client: BaseAntigravityClient, models: List[Model], current_model: Model):
         super().__init__(timeout=None) # Persistent view if needed, but for now just standard
         self.client = client
         self.models = models

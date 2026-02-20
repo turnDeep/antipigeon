@@ -10,7 +10,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.core.config import config
-from src.core.antigravity import AntigravityClient, TaskStatus
+from src.core.antigravity import get_antigravity_client, TaskStatus
 from src.utils.attachment_handler import process_attachment
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,8 @@ class AntipigeonBot(commands.Bot):
             intents=intents,
             help_command=None
         )
-        self.antigravity = AntigravityClient()
+        # Initialize client (Mock or Real based on env)
+        self.antigravity = get_antigravity_client(config.antigravity_api_url)
         self.start_time = datetime.now()
 
     async def setup_hook(self):

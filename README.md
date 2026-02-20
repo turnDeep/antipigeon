@@ -16,6 +16,7 @@ DiscordとAntigravityを行き来して、指示と結果を運ぶ“伝書鳩�
 
 *   Docker / Docker Compose
 *   Discord Bot Token
+*   Google Antigravity (または互換性のあるAPIサーバー)
 
 ## インストール & 実行 (Docker)
 
@@ -30,37 +31,19 @@ DiscordとAntigravityを行き来して、指示と結果を運ぶ“伝書鳩�
     ```ini
     DISCORD_TOKEN=your_actual_token_here
     ALLOWED_USER_IDS=123456789012345678
+
+    # 本物のAntigravity APIを使用する場合（未設定の場合はモックモードになります）
+    # ANTIGRAVITY_API_URL=http://localhost:8080/api/v1
     ```
 4.  Docker Compose で起動します:
     ```bash
     docker-compose up -d
     ```
 
-コンテナは自動的に再起動するように設定されています。
-
-### ログの確認
-```bash
-docker-compose logs -f
-```
-
-### 停止
-```bash
-docker-compose down
-```
-
-## 開発者向け (ローカル実行)
-
-Dockerを使わずに直接Pythonで実行する場合の手順です。
-
-1.  依存関係をインストール:
-    ```bash
-    pip install -r requirements.txt
-    ```
-2.  `.env` ファイルを作成してTokenを設定します。
-3.  Botを起動:
-    ```bash
-    python src/bot.py
-    ```
+### Antigravity との連携について
+Google Antigravity (Preview) がローカルサーバーとして動作している場合、そのAPIエンドポイントを `ANTIGRAVITY_API_URL` に設定することで連携可能です。
+APIが公開されていない、またはCLIのみの場合は、`src/core/antigravity.py` 内の `HttpAntigravityClient` またはCLIラッパー（要実装）を環境に合わせて調整してください。
+デフォルトでは「Simulation Mode（モック）」で動作し、UIやスケジューリングの挙動を確認できます。
 
 ## コマンド一覧
 
