@@ -62,11 +62,18 @@ class Scheduler(commands.Cog):
     async def execute_scheduled_task(self, channel_id, prompt, workspace_name):
         channel = self.bot.get_channel(channel_id)
         if not channel:
-            logger.warning(f"Channel {channel_id} not found for scheduled task.")
-            return
+            try:
+                channel = await self.bot.fetch_channel(channel_id)
+            except discord.NotFound:
+                logger.warning(f"Channel {channel_id} not found/deleted for scheduled task.")
+                # Optionally disable the schedule here to prevent repeated errors
+                return
+            except Exception as e:
+                logger.error(f"Error fetching channel {channel_id}: {e}")
+                return
 
         embed = discord.Embed(
-            title="⏰ Scheduled Task Started",
+            title="🐦‍⬛ AntiCrow Scheduled Task Started",
             description=f"Executing: **{prompt}**\nWorkspace: **{workspace_name}**",
             color=discord.Color.purple()
         )
@@ -78,12 +85,12 @@ class Scheduler(commands.Cog):
         try:
             async for task_update in client.execute_task(prompt, workspace_name):
                 new_embed = discord.Embed(
-                    title=f"⏰ Task Status: {task_update.status.value.upper()}",
+                    title=f"🐦‍⬛ AntiCrow Task Status: {task_update.status.value.upper()}",
                     description=f"**Step**: {task_update.current_step}\n**Progress**: {task_update.progress}%",
                     color=discord.Color.orange()
                 )
                 if task_update.status.value == "completed":
-                    new_embed.title = "✅ Scheduled Task Completed"
+                    new_embed.title = "✅ AntiCrow Task Completed"
                     new_embed.color = discord.Color.green()
                     new_embed.description = task_update.result.output
 

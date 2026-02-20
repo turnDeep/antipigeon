@@ -37,8 +37,10 @@ class RefreshButton(discord.ui.Button):
     def __init__(self):
         super().__init__(
             style=discord.ButtonStyle.primary,
-            label="🔄 更新",
-            custom_id="refresh_models"
+            label="更新",
+            emoji="🔄",
+            custom_id="refresh_models",
+            row=4
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -145,7 +147,7 @@ class General(commands.Cog):
     async def execute_template_task(self, channel, prompt, workspace):
         # Create initial embed
         embed = discord.Embed(
-            title="🕊️ Antipigeon Template Task",
+            title="🐦‍⬛ AntiCrow Template Task",
             description=f"Processing template for workspace **{workspace.name}**...",
             color=discord.Color.blue()
         )
@@ -156,7 +158,7 @@ class General(commands.Cog):
         try:
             async for task_update in self.antigravity.execute_task(prompt, workspace.name):
                 new_embed = discord.Embed(
-                    title=f"🕊️ Task Status: {task_update.status.value.upper()}",
+                    title=f"🐦‍⬛ Task Status: {task_update.status.value.upper()}",
                     description=f"**Step**: {task_update.current_step}\n**Progress**: {task_update.progress}%",
                     color=discord.Color.orange() if task_update.status == TaskStatus.RUNNING else discord.Color.green()
                 )

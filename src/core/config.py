@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 # Load .env file
 load_dotenv()
 
-SERVICE_NAME = "Antipigeon"
+SERVICE_NAME = "AntiCrow"
 TOKEN_KEY = "discord_bot_token"
 
 class Config:
