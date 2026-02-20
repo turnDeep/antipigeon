@@ -32,23 +32,23 @@ class Config:
             return []
 
     def _load_token(self):
-        # Try keyring first
+        # Try .env first (Docker priority)
+        token = os.getenv("DISCORD_TOKEN")
+        if token and token != "your_token_here":
+            logger.info("Loaded Discord token from .env.")
+            return token
+
+        # Try keyring as secondary
         try:
             token = keyring.get_password(SERVICE_NAME, TOKEN_KEY)
             if token:
                 logger.info("Loaded Discord token from SecretStorage/Keyring.")
                 return token
         except Exception as e:
-            logger.warning(f"Failed to load token from keyring: {e}")
+            logger.debug(f"Keyring access failed (expected in Docker): {e}")
 
-        # Fallback to env
-        token = os.getenv("DISCORD_TOKEN")
-        if token:
-            logger.info("Loaded Discord token from .env.")
-            return token
-
-        logger.error("Discord Token not found in Keyring or .env!")
-        return None
+        logger.error("CRITICAL: DISCORD_TOKEN is missing! Please set it in .env.")
+        raise ValueError("DISCORD_TOKEN is required in .env file.")
 
     @property
     def token(self):
