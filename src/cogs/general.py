@@ -6,35 +6,96 @@ import os
 import logging
 from typing import List, Optional
 
-from src.core.antigravity import AntigravityClient, TaskStatus
+from src.core.antigravity import AntigravityClient, TaskStatus, Model
 
 logger = logging.getLogger(__name__)
 
 TEMPLATE_FILE = "data/templates.json"
 
-class ModelSelect(discord.ui.Select):
-    def __init__(self, models):
-        options = [
-            discord.SelectOption(
-                label=m.name,
-                value=m.id,
-                description=f"v{m.version} - {', '.join(m.capabilities)}"
-            ) for m in models
-        ]
-        super().__init__(placeholder="Select a model...", min_values=1, max_values=1, options=options)
+class ModelButton(discord.ui.Button):
+    def __init__(self, model: Model, is_selected: bool):
+        super().__init__(
+            style=discord.ButtonStyle.success if is_selected else discord.ButtonStyle.secondary,
+            label=model.name[:80], # Limit label length just in case
+            custom_id=f"select_model_{model.id}"
+        )
+        self.model_id = model.id
 
     async def callback(self, interaction: discord.Interaction):
-        view = self.view
-        selected_id = self.values[0]
-        await view.client.set_model(selected_id)
-        current_model = await view.client.get_current_model()
-        await interaction.response.send_message(f"✅ Switched to model: **{current_model.name}**", ephemeral=True)
+        # Determine the view to access the client
+        view: ModelManagementView = self.view
 
-class ModelView(discord.ui.View):
-    def __init__(self, client: AntigravityClient, models):
-        super().__init__()
+        # Set new model
+        try:
+            await view.client.set_model(self.model_id)
+            # Refresh the UI
+            await view.refresh_ui(interaction)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error setting model: {e}", ephemeral=True)
+
+class RefreshButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(
+            style=discord.ButtonStyle.primary,
+            label="🔄 更新",
+            custom_id="refresh_models"
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        view: ModelManagementView = self.view
+        await view.refresh_ui(interaction)
+
+class ModelManagementView(discord.ui.View):
+    def __init__(self, client: AntigravityClient, models: List[Model], current_model: Model):
+        super().__init__(timeout=None) # Persistent view if needed, but for now just standard
         self.client = client
-        self.add_item(ModelSelect(models))
+        self.models = models
+        self.current_model = current_model
+
+        # Add buttons for each model
+        for model in models:
+            is_selected = (model.id == current_model.id)
+            self.add_item(ModelButton(model, is_selected))
+
+        # Add refresh button
+        self.add_item(RefreshButton())
+
+    async def refresh_ui(self, interaction: discord.Interaction):
+        # Fetch latest state
+        self.models = await self.client.get_models()
+        self.current_model = await self.client.get_current_model()
+
+        # Rebuild view
+        self.clear_items()
+        for model in self.models:
+            is_selected = (model.id == self.current_model.id)
+            self.add_item(ModelButton(model, is_selected))
+        self.add_item(RefreshButton())
+
+        # Rebuild embed
+        embed = self.create_embed()
+
+        # Update message
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    def create_embed(self) -> discord.Embed:
+        embed = discord.Embed(title="🤖 モデル管理", color=discord.Color.dark_theme())
+
+        # Current Model Status
+        # Assuming status_text contains something like "🟢 100% ⏳ 4h 59m"
+        status = self.current_model.status_text
+        embed.description = f"**現在のモデル**: {self.current_model.name} ({status})"
+
+        # Available Models List
+        models_desc = ""
+        for m in self.models:
+            icon = "✅" if m.id == self.current_model.id else "⬜"
+            # Format: ⬜ Gemini 3 Pro (High) 🟢 100% ⏳ 4h 59m
+            models_desc += f"{icon} {m.name} {m.status_text}\n"
+
+        embed.add_field(name=f"📋 利用可能なモデル ({len(self.models)}件)", value=models_desc, inline=False)
+        embed.set_footer(text=f"Updated at {discord.utils.utcnow().strftime('%H:%M')}")
+        return embed
 
 class TemplateRunSelect(discord.ui.Select):
     def __init__(self, cog, templates, workspace):
@@ -121,14 +182,9 @@ class General(commands.Cog):
         models = await self.antigravity.get_models()
         current = await self.antigravity.get_current_model()
 
-        embed = discord.Embed(title="🤖 Model Management", color=discord.Color.blue())
-        desc = f"**Current Model**: {current.name} (v{current.version})\n\n**Available Models**:"
-        for m in models:
-            check = "✅" if m.id == current.id else "⬜"
-            desc += f"\n{check} **{m.name}** ({', '.join(m.capabilities)})"
+        view = ModelManagementView(self.antigravity, models, current)
+        embed = view.create_embed()
 
-        embed.description = desc
-        view = ModelView(self.antigravity, models)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     @app_commands.command(name="mode", description="Switch execution mode (Planning/Fast)")

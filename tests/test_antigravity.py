@@ -9,7 +9,7 @@ class TestAntigravity(unittest.IsolatedAsyncioTestCase):
     async def test_get_models(self):
         models = await self.client.get_models()
         self.assertTrue(len(models) > 0)
-        self.assertEqual(models[0].id, "gemini-3-pro")
+        self.assertEqual(models[0].id, "gemini-3-pro-high")
 
     async def test_workspaces(self):
         ws = await self.client.get_workspaces()

@@ -21,6 +21,7 @@ class Model:
     name: str
     version: str
     capabilities: List[str]
+    status_text: str = "" # e.g. "🟢 100% ⏳ 4h 59m"
 
 @dataclass
 class Workspace:
@@ -50,11 +51,14 @@ class Task:
 class AntigravityClient:
     def __init__(self):
         self._models = [
-            Model("gemini-3-pro", "Gemini 3 Pro", "3.0", ["reasoning", "coding"]),
-            Model("gemini-3-flash", "Gemini 3 Flash", "3.0", ["fast", "coding"]),
-            Model("claude-sonnet-4.5", "Claude Sonnet 4.5", "4.5", ["reasoning", "coding"]),
-            Model("claude-opus-4.6", "Claude Opus 4.6 (Thinking)", "4.6", ["deep-reasoning"]),
-            Model("gpt-oss-120b", "GPT-OSS 120B (Medium)", "120B", ["general"]),
+            Model("gemini-3-pro-high", "Gemini 3 Pro (High)", "3.0", ["high-res", "coding"], "🟢 100% ⏳ 4h 59m"),
+            Model("gemini-3-pro-low", "Gemini 3 Pro (Low)", "3.0", ["fast", "coding"], "🟢 100% ⏳ 4h 59m"),
+            Model("gemini-3-flash", "Gemini 3 Flash", "3.0", ["flash", "coding"], "🟢 100% ⏳ 4h 59m"),
+            Model("claude-sonnet-4.5", "Claude Sonnet 4.5", "4.5", ["reasoning"], "🟡 40% ⏳ 26m"),
+            Model("claude-sonnet-4.5-think", "Claude Sonnet 4.5 (Thinking)", "4.5", ["thinking"], "🟡 40% ⏳ 26m"),
+            Model("claude-sonnet-4.6", "Claude Sonnet 4.6", "4.6", ["reasoning"], "🟡 40% ⏳ 26m"),
+            Model("claude-opus-4.6-think", "Claude Opus 4.6 (Thinking)", "4.6", ["deep-thinking"], "🟡 40% ⏳ 26m"),
+            Model("gpt-oss-120b-med", "GPT-OSS 120B (Medium)", "120B", ["general"], "🟡 40% ⏳ 26m"),
         ]
         self._workspaces = [
             Workspace("ws-crypto", "crypto", "/home/user/projects/crypto-bot", "2025-01-10"),
@@ -62,7 +66,7 @@ class AntigravityClient:
             Workspace("ws-backend", "backend", "/home/user/projects/api-server", "2025-02-15"),
         ]
         self._active_tasks: Dict[str, Task] = {}
-        self._current_model_id = "claude-opus-4.6"
+        self._current_model_id = "claude-opus-4.6-think"
         self._mode = "planning"  # planning or fast
 
     async def get_models(self) -> List[Model]:
