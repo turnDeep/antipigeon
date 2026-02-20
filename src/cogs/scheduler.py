@@ -43,14 +43,19 @@ class Scheduler(commands.Cog):
     def _add_job_to_scheduler(self, job_id, data):
         try:
             trigger = CronTrigger.from_crontab(data['cron'])
-            self.scheduler.add_job(
+            job = self.scheduler.add_job(
                 self.execute_scheduled_task,
                 trigger,
                 id=job_id,
                 args=[data['channel_id'], data['prompt'], data['workspace']],
                 replace_existing=True
             )
-            logger.info(f"Scheduled job {job_id}: {data['cron']}")
+
+            # Check if paused
+            if not data.get('enabled', True):
+                job.pause()
+
+            logger.info(f"Scheduled job {job_id}: {data['cron']} (Enabled: {data.get('enabled', True)})")
         except Exception as e:
             logger.error(f"Failed to schedule job {job_id}: {e}")
 
@@ -68,16 +73,10 @@ class Scheduler(commands.Cog):
         msg = await channel.send(embed=embed)
 
         # Execute in Antigravity
-        # Use the bot's antigravity client
         client = self.bot.antigravity
 
         try:
             async for task_update in client.execute_task(prompt, workspace_name):
-                # Update status (maybe not every step to avoid spam, or edit message)
-                # For scheduled tasks, maybe just final result or key steps?
-                # The user requirement says "Long jobs progress real-time notification"
-                # So we should edit the embed.
-
                 new_embed = discord.Embed(
                     title=f"⏰ Task Status: {task_update.status.value.upper()}",
                     description=f"**Step**: {task_update.current_step}\n**Progress**: {task_update.progress}%",
@@ -96,13 +95,9 @@ class Scheduler(commands.Cog):
     @app_commands.command(name="schedule", description="Schedule a recurring task")
     @app_commands.describe(cron="Cron expression (e.g. '*/10 * * * *')", prompt="Task prompt", workspace="Workspace name")
     async def schedule(self, interaction: discord.Interaction, cron: str, prompt: str, workspace: str):
-        # Validate workspace
         ws = await self.bot.antigravity.get_workspace_by_name(workspace)
-        if not ws:
-             # Try to find if user meant to create one?
-             # For safety, require existing workspace or exact name.
-             # Or just warn.
-             pass
+        # We allow scheduling even if workspace check fails strictly (maybe it will exist later),
+        # but for now let's assume loose check or warn.
 
         try:
             CronTrigger.from_crontab(cron)
@@ -116,7 +111,8 @@ class Scheduler(commands.Cog):
             "prompt": prompt,
             "workspace": workspace,
             "channel_id": interaction.channel_id,
-            "created_at": str(interaction.created_at)
+            "created_at": str(interaction.created_at),
+            "enabled": True
         }
 
         self.schedules[job_id] = data
@@ -139,11 +135,11 @@ class Scheduler(commands.Cog):
 
         embed = discord.Embed(title="🗓️ Active Schedules", color=discord.Color.blue())
         for jid, data in self.schedules.items():
-            val = f"**Cron**: `{data['cron']}`\n**Workspace**: {data['workspace']}\n**Prompt**: {data['prompt']}"
+            status = "🟢 Running" if data.get('enabled', True) else "⏸️ Paused"
+            val = f"**Status**: {status}\n**Cron**: `{data['cron']}`\n**Workspace**: {data['workspace']}\n**Prompt**: {data['prompt']}"
             embed.add_field(name=f"ID: {jid}", value=val, inline=False)
 
-        # Add a view to delete?
-        view = ScheduleView(self, self.schedules.keys())
+        view = ScheduleView(self, self.schedules)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def delete_schedule(self, job_id: str):
@@ -155,24 +151,90 @@ class Scheduler(commands.Cog):
             return True
         return False
 
+    async def toggle_schedule(self, job_id: str):
+        if job_id in self.schedules:
+            current = self.schedules[job_id].get('enabled', True)
+            self.schedules[job_id]['enabled'] = not current
+            self._save_schedules()
+
+            job = self.scheduler.get_job(job_id)
+            if job:
+                if self.schedules[job_id]['enabled']:
+                    job.resume()
+                else:
+                    job.pause()
+            return True
+        return False
+
+class ScheduleActionView(discord.ui.View):
+    def __init__(self, cog, job_id):
+        super().__init__()
+        self.cog = cog
+        self.job_id = job_id
+
+        data = cog.schedules.get(job_id)
+        is_enabled = data and data.get('enabled', True)
+
+        for child in self.children:
+            if isinstance(child, discord.ui.Button) and child.custom_id == "toggle":
+                if is_enabled:
+                    child.label = "Pause"
+                    child.style = discord.ButtonStyle.secondary
+                else:
+                    child.label = "Resume"
+                    child.style = discord.ButtonStyle.success
+                break
+
+    @discord.ui.button(custom_id="toggle", label="Pause/Resume", style=discord.ButtonStyle.primary)
+    async def toggle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.cog.toggle_schedule(self.job_id)
+        # Update button
+        data = self.cog.schedules.get(self.job_id)
+        if data and data.get('enabled', True):
+             button.label = "Pause"
+             button.style = discord.ButtonStyle.secondary
+             await interaction.response.edit_message(content=f"✅ Resumed schedule {self.job_id}", view=self)
+        elif data:
+             button.label = "Resume"
+             button.style = discord.ButtonStyle.success
+             await interaction.response.edit_message(content=f"⏸️ Paused schedule {self.job_id}", view=self)
+        else:
+             await interaction.response.edit_message(content="❌ Schedule no longer exists.", view=None)
+
+    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
+    async def delete_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.cog.delete_schedule(self.job_id)
+        await interaction.response.edit_message(content=f"🗑️ Deleted schedule {self.job_id}", view=None)
+
 class ScheduleSelect(discord.ui.Select):
-    def __init__(self, cog, job_ids):
-        options = [discord.SelectOption(label=jid, value=jid) for jid in job_ids]
-        super().__init__(placeholder="Select schedule to delete...", options=options)
+    def __init__(self, cog, schedules):
+        options = []
+        for jid, data in schedules.items():
+            status = "🟢" if data.get('enabled', True) else "⏸️"
+            label = f"{status} {jid}"
+            desc = f"{data['workspace']}: {data['prompt'][:30]}"
+            options.append(discord.SelectOption(label=label, value=jid, description=desc))
+
+        super().__init__(placeholder="Select a schedule to manage...", options=options)
         self.cog = cog
 
     async def callback(self, interaction: discord.Interaction):
         job_id = self.values[0]
-        if await self.cog.delete_schedule(job_id):
-            await interaction.response.send_message(f"🗑️ Schedule **{job_id}** deleted.", ephemeral=True)
-        else:
-            await interaction.response.send_message("❌ Schedule not found.", ephemeral=True)
+        data = self.cog.schedules.get(job_id)
+        if not data:
+             await interaction.response.send_message("❌ Schedule not found.", ephemeral=True)
+             return
+
+        view = ScheduleActionView(self.cog, job_id)
+        status = "Running" if data.get('enabled', True) else "Paused"
+        content = f"**Managing Schedule {job_id}**\nStatus: {status}\nPrompt: {data['prompt']}\nCron: `{data['cron']}`"
+        await interaction.response.send_message(content, view=view, ephemeral=True)
 
 class ScheduleView(discord.ui.View):
-    def __init__(self, cog, job_ids):
+    def __init__(self, cog, schedules):
         super().__init__()
-        if job_ids:
-            self.add_item(ScheduleSelect(cog, job_ids))
+        if schedules:
+            self.add_item(ScheduleSelect(cog, schedules))
 
 async def setup(bot):
     await bot.add_cog(Scheduler(bot))

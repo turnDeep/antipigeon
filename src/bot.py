@@ -7,6 +7,7 @@ from datetime import datetime
 
 from src.core.config import config
 from src.core.antigravity import AntigravityClient, TaskStatus
+from src.utils.attachment_handler import process_attachment
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,15 @@ class AntiCrowBot(commands.Bot):
         prompt = message.content
         attachments = [a.url for a in message.attachments]
 
+        # Parse attachments for content
+        attachment_contents = []
+        for att in message.attachments:
+            try:
+                content = await process_attachment(att)
+                attachment_contents.append(content)
+            except Exception as e:
+                logger.error(f"Failed to process attachment {att.filename}: {e}")
+
         # Check for context (Reply)
         context_text = ""
         if message.reference:
@@ -120,6 +130,8 @@ class AntiCrowBot(commands.Bot):
                 logger.warning(f"Failed to fetch context message: {e}")
 
         full_prompt = context_text + prompt
+        if attachment_contents:
+            full_prompt += "\n" + "".join(attachment_contents)
 
         if not prompt and not attachments and not context_text:
             return

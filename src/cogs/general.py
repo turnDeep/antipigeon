@@ -6,7 +6,7 @@ import os
 import logging
 from typing import List, Optional
 
-from src.core.antigravity import AntigravityClient
+from src.core.antigravity import AntigravityClient, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,30 @@ class ModelView(discord.ui.View):
         self.client = client
         self.add_item(ModelSelect(models))
 
+class TemplateRunSelect(discord.ui.Select):
+    def __init__(self, cog, templates, workspace):
+        options = []
+        for name, content in templates.items():
+            desc = content[:50] + "..." if len(content) > 50 else content
+            options.append(discord.SelectOption(label=name, description=desc, value=name))
+
+        super().__init__(placeholder="Select a template to run...", min_values=1, max_values=1, options=options)
+        self.cog = cog
+        self.templates = templates
+        self.workspace = workspace
+
+    async def callback(self, interaction: discord.Interaction):
+        name = self.values[0]
+        prompt = self.templates[name]
+        await interaction.response.send_message(f"🚀 Starting template **{name}** in **{self.workspace.name}**...", ephemeral=True)
+        # Execute
+        await self.cog.execute_template_task(interaction.channel, prompt, self.workspace)
+
+class TemplateRunView(discord.ui.View):
+    def __init__(self, cog, templates, workspace):
+        super().__init__()
+        self.add_item(TemplateRunSelect(cog, templates, workspace))
+
 class General(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -56,6 +80,41 @@ class General(commands.Cog):
         os.makedirs(os.path.dirname(TEMPLATE_FILE), exist_ok=True)
         with open(TEMPLATE_FILE, 'w') as f:
             json.dump(self.templates, f, indent=4)
+
+    async def execute_template_task(self, channel, prompt, workspace):
+        # Create initial embed
+        embed = discord.Embed(
+            title="🐦‍⬛ AntiCrow Template Task",
+            description=f"Processing template for workspace **{workspace.name}**...",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="Prompt", value=prompt[:1000], inline=False)
+
+        message = await channel.send(embed=embed)
+
+        try:
+            async for task_update in self.antigravity.execute_task(prompt, workspace.name):
+                new_embed = discord.Embed(
+                    title=f"🐦‍⬛ Task Status: {task_update.status.value.upper()}",
+                    description=f"**Step**: {task_update.current_step}\n**Progress**: {task_update.progress}%",
+                    color=discord.Color.orange() if task_update.status == TaskStatus.RUNNING else discord.Color.green()
+                )
+                if task_update.status == TaskStatus.COMPLETED:
+                    new_embed.title = "✅ Task Completed"
+                    new_embed.description = task_update.result.output
+                    if task_update.result.artifacts:
+                        files_str = "\n".join([f"`{f}`" for f in task_update.result.artifacts])
+                        new_embed.add_field(name="Artifacts", value=files_str, inline=False)
+
+                elif task_update.status == TaskStatus.FAILED:
+                     new_embed.title = "❌ Task Failed"
+                     new_embed.color = discord.Color.red()
+                     new_embed.description = f"Error: {task_update.result.error}"
+
+                await message.edit(embed=new_embed)
+        except Exception as e:
+            logger.error(f"Error executing template task: {e}")
+            await message.edit(content=f"❌ Error: {e}")
 
     @app_commands.command(name="models", description="List and switch AI models")
     async def models(self, interaction: discord.Interaction):
@@ -106,11 +165,12 @@ class General(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="templates", description="Manage prompt templates")
-    @app_commands.describe(action="list/add/remove", name="Template name", content="Template content (for add)")
+    @app_commands.describe(action="list/add/remove/run", name="Template name", content="Template content (for add)")
     @app_commands.choices(action=[
         app_commands.Choice(name="List", value="list"),
         app_commands.Choice(name="Add", value="add"),
-        app_commands.Choice(name="Remove", value="remove")
+        app_commands.Choice(name="Remove", value="remove"),
+        app_commands.Choice(name="Run", value="run")
     ])
     async def templates(self, interaction: discord.Interaction, action: app_commands.Choice[str], name: Optional[str] = None, content: Optional[str] = None):
         if action.value == "list":
@@ -141,6 +201,31 @@ class General(commands.Cog):
                 await interaction.response.send_message(f"🗑️ Template **{name}** removed.", ephemeral=True)
             else:
                 await interaction.response.send_message(f"❌ Template **{name}** not found.", ephemeral=True)
+
+        elif action.value == "run":
+            if not self.templates:
+                await interaction.response.send_message("No templates saved.", ephemeral=True)
+                return
+
+            # Identify Workspace
+            workspace = None
+            if hasattr(interaction.channel, "category") and interaction.channel.category:
+                 workspace = await self.antigravity.get_workspace_by_name(interaction.channel.category.name)
+
+            if not workspace:
+                await interaction.response.send_message("❌ Please run this command inside a Workspace channel.", ephemeral=True)
+                return
+
+            if name:
+                 if name in self.templates:
+                     prompt = self.templates[name]
+                     await interaction.response.send_message(f"🚀 Starting template **{name}**...", ephemeral=True)
+                     await self.execute_template_task(interaction.channel, prompt, workspace)
+                 else:
+                     await interaction.response.send_message(f"❌ Template **{name}** not found.", ephemeral=True)
+            else:
+                view = TemplateRunView(self, self.templates, workspace)
+                await interaction.response.send_message("Select a template to run:", view=view, ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(General(bot))
