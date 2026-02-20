@@ -84,7 +84,7 @@ class General(commands.Cog):
     async def execute_template_task(self, channel, prompt, workspace):
         # Create initial embed
         embed = discord.Embed(
-            title="🐦‍⬛ AntiCrow Template Task",
+            title="🐦‍⬛ Antipigeon Template Task",
             description=f"Processing template for workspace **{workspace.name}**...",
             color=discord.Color.blue()
         )
